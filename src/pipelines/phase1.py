@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pandas as pd
-
 from core.config import load_settings
 from core.utils import now_utc, write_csv, write_json
 from evaluation.metrics import evaluate_pipeline
