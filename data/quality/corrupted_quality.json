@@ -1,0 +1,52 @@
+{
+  "report_name": "corrupted_quality",
+  "generated_at": "2026-08-06T08:37:49.907605+00:00",
+  "total_rows": 23,
+  "checks": [
+    {
+      "name": "row_count_min",
+      "dimension": "Completeness",
+      "expected": ">= 10",
+      "observed": 23,
+      "success": true
+    },
+    {
+      "name": "paper_id_not_null",
+      "dimension": "Completeness",
+      "expected": "== 0",
+      "observed": 0,
+      "success": true
+    },
+    {
+      "name": "paper_id_unique",
+      "dimension": "Uniqueness",
+      "expected": "== 0",
+      "observed": 3,
+      "success": false
+    },
+    {
+      "name": "title_not_empty",
+      "dimension": "Completeness",
+      "expected": "== 0",
+      "observed": 0,
+      "success": true
+    },
+    {
+      "name": "summary_min_length",
+      "dimension": "Validity",
+      "expected": "== 0",
+      "observed": 5,
+      "success": false
+    },
+    {
+      "name": "freshness_age_days",
+      "dimension": "Timeliness",
+      "expected": "== 0",
+      "observed": 6,
+      "success": false
+    }
+  ],
+  "success_count": 3,
+  "failed_count": 3,
+  "success": false
+}
