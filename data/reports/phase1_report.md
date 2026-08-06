@@ -1,6 +1,6 @@
 # Báo cáo Pha 1 — Baseline trên dữ liệu sạch
 
-_Sinh tự động lúc 2026-08-06T09:26:39.497688+00:00 từ artifact thật trong `data/`._
+_Sinh tự động lúc 2026-08-06T10:06:37.452656+00:00 từ artifact thật trong `data/`._
 
 ## 1. Nguồn dữ liệu và cấu hình
 
@@ -9,15 +9,17 @@ _Sinh tự động lúc 2026-08-06T09:26:39.497688+00:00 từ artifact thật tr
 | Nguồn | `Crossref REST API` |
 | Query | `agentic retrieval augmented generation large language model` |
 | Filter | `from-pub-date:2026-02-07,has-abstract:true` |
-| Thời điểm lấy dữ liệu | `2026-08-06T09:26:39.496687+00:00` |
+| Thời điểm lấy dữ liệu | `2026-08-06T08:36:03.911604+00:00` |
 | Số raw record | `23` |
 | Số dòng sau cleaning | `23` |
 | Số record bị loại khi cleaning | `0` |
 | Embedding model | `sentence-transformers/all-MiniLM-L6-v2` |
 | Vector collection | `papers-baseline` |
 | Retrieval top_k | `4` |
-| LLM provider | `openrouter` |
-| LLM model | `openai/gpt-4o-mini` |
+| LLM provider | `gemini` |
+| LLM model | `gemini-2.5-flash` |
+| source_mode | `reused snapshot` |
+| judge_mode | `heuristic fallback (LLM judge khong dung duoc)` |
 
 ## 2. Kết quả đánh giá
 

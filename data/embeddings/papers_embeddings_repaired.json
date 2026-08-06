@@ -1,7 +1,7 @@
 {
   "backend": "chroma",
   "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-  "persist_path": "D:\\AI_In_Action\\K4_Day10_Data-Pipeline-Data-Observability\\data\\chroma",
+  "persist_path": "D:\\Lab Vin AI\\Day10-2A202601274-Nguyen-Thanh-Binh\\data\\chroma",
   "collection_name": "papers-repaired",
   "documents": [
     {

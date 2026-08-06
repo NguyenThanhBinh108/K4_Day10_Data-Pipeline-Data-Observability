@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+
 import pandas as pd
 
-from core.config import load_settings
+from core.config import Settings, load_settings
 from core.utils import now_utc, read_json, write_csv, write_json
 from evaluation.metrics import evaluate_pipeline
 from ingestion.cleaning import build_clean_dataframe
@@ -11,6 +13,28 @@ from ingestion.crossref import load_raw_records
 from observability.quality import build_freshness_report, run_data_quality_checks
 from observability.reporting import generate_corruption_report
 from retrieval.index import LocalEmbeddingIndex
+
+
+def _baseline_fingerprint(settings: Settings) -> dict[str, str]:
+    """Hash cac artifact baseline de chung minh flow nay khong ghi de len chung.
+
+    Cong nghiem thu CP5 doi 'baseline khong bi ghi de'. Khang dinh suong thi khong
+    kiem chung duoc, nen ta bam truoc va sau roi doi chieu.
+    """
+    targets = {
+        "clean_csv": settings.paths.clean_csv,
+        "embeddings_json": settings.paths.embeddings_json,
+        "baseline_metrics": settings.paths.baseline_metrics,
+        "baseline_answers": settings.paths.baseline_answers,
+        "eval_testset": settings.paths.eval_testset,
+        "baseline_quality": settings.paths.quality_dir / "baseline_quality.json",
+        "freshness_report": settings.paths.freshness_report,
+    }
+    return {
+        name: hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+        for name, path in targets.items()
+        if path.exists()
+    }
 
 
 def main() -> None:
@@ -25,8 +49,18 @@ def main() -> None:
     if not settings.paths.eval_testset.exists():
         raise FileNotFoundError(f"Missing locked test set: {settings.paths.eval_testset}")
 
+    fingerprint_before = _baseline_fingerprint(settings)
+
     clean_df = pd.read_csv(settings.paths.clean_csv).fillna("")
     baseline_metrics = read_json(settings.paths.baseline_metrics)
+
+    # Doc quality/freshness cua baseline de bao cao so sanh co du ba cot co so lieu that
+    # (yeu cau cua checkpoint C4), thay vi tro nguoc ve phase1_report.md.
+    baseline_quality_path = settings.paths.quality_dir / "baseline_quality.json"
+    baseline_quality = read_json(baseline_quality_path) if baseline_quality_path.exists() else {}
+    baseline_freshness = (
+        read_json(settings.paths.freshness_report) if settings.paths.freshness_report.exists() else {}
+    )
 
     corrupted_df = corrupt_clean_dataframe(clean_df, settings.paths.corruption_log)
     write_csv(corrupted_df, settings.paths.corrupted_clean_csv)
@@ -84,6 +118,21 @@ def main() -> None:
         repaired_quality=repaired_quality,
         corrupted_freshness=corrupted_freshness,
         repaired_freshness=repaired_freshness,
+        baseline_quality=baseline_quality,
+        baseline_freshness=baseline_freshness,
     )
     print(f"[corruption] wrote report: {settings.paths.comparison_report}")
+
+    changed = [
+        name
+        for name, digest in _baseline_fingerprint(settings).items()
+        if fingerprint_before.get(name) != digest
+    ]
+    if changed:
+        raise RuntimeError(
+            "Corruption flow da ghi de artifact baseline: "
+            + ", ".join(changed)
+            + ". Baseline phai nguyen ven thi bang so sanh ba trang thai moi co y nghia."
+        )
+    print(f"[corruption] baseline nguyen ven: {len(fingerprint_before)} artifact khong doi")
     print("[corruption] done")

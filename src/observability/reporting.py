@@ -234,11 +234,21 @@ def generate_corruption_report(
     repaired_quality: dict[str, Any],
     corrupted_freshness: dict[str, Any],
     repaired_freshness: dict[str, Any],
+    baseline_quality: dict[str, Any] | None = None,
+    baseline_freshness: dict[str, Any] | None = None,
 ) -> None:
     """Bao cao so sanh baseline / corrupted / repaired.
 
     Cot delta va muc phuc hoi deu tinh bang code tu ba file metrics that.
+
+    `baseline_quality` va `baseline_freshness` la tham so THEM (khong co trong chu ky
+    goc cua starter nen khong pha vo contract). Thieu chung thi bang quality chi co
+    2/3 cot co so, ma checkpoint C4 doi bang ba trang thai phai co so lieu that o CA
+    RAG metrics lan quality signals. corruption_flow doc san hai file nay tu
+    data/quality/ va truyen vao.
     """
+    baseline_quality = baseline_quality or {}
+    baseline_freshness = baseline_freshness or {}
     baseline_metrics = baseline_metrics or {}
     corrupted_metrics = corrupted_metrics or {}
     repaired_metrics = repaired_metrics or {}
@@ -282,36 +292,45 @@ def generate_corruption_report(
         "| --- | --- | --- | --- |",
     ]
 
-    # Baseline quality khong nam trong tham so cua ham nay theo contract, nen cot baseline
-    # duoc suy tu chinh corrupted/repaired: mot check chi co the "hong" neu truoc do dat.
+    baseline_checks = {c["name"]: c for c in (baseline_quality.get("checks") or [])}
     corrupted_checks = {c["name"]: c for c in (corrupted_quality.get("checks") or [])}
     repaired_checks = {c["name"]: c for c in (repaired_quality.get("checks") or [])}
     flipped: list[str] = []
 
-    for name in list(corrupted_checks) or list(repaired_checks):
+    def _cell(check: dict[str, Any]) -> str:
+        if not check:
+            return MISSING
+        return f"{_flag(check.get('success'))} (`{check.get('observed', MISSING)}`)"
+
+    for name in list(baseline_checks) or list(corrupted_checks) or list(repaired_checks):
+        base_check = baseline_checks.get(name, {})
         corr_check = corrupted_checks.get(name, {})
         rep_check = repaired_checks.get(name, {})
-        corr_cell = f"{_flag(corr_check.get('success'))} (`{corr_check.get('observed', MISSING)}`)"
-        rep_cell = f"{_flag(rep_check.get('success'))} (`{rep_check.get('observed', MISSING)}`)"
-        lines.append(f"| `{name}` | xem `phase1_report.md` | {corr_cell} | {rep_cell} |")
-        if corr_check.get("success") is False:
+        lines.append(f"| `{name}` | {_cell(base_check)} | {_cell(corr_check)} | {_cell(rep_check)} |")
+        # "Lat trang thai" chi tinh khi baseline that su dat va corrupted thi khong.
+        if base_check.get("success") is True and corr_check.get("success") is False:
             flipped.append(name)
 
     lines += [
         "",
+        f"- Baseline: {_quality_summary(baseline_quality)}, tổng `{_flag(baseline_quality.get('success'))}`",
         f"- Corrupted: {_quality_summary(corrupted_quality)}, tổng `{_flag(corrupted_quality.get('success'))}`",
         f"- Repaired: {_quality_summary(repaired_quality)}, tổng `{_flag(repaired_quality.get('success'))}`",
         "",
         "## 3. Freshness",
         "",
-        "| Thuộc tính | Corrupted | Repaired |",
-        "| --- | --- | --- |",
-        f"| Trạng thái | {_fresh_summary(corrupted_freshness)} | {_fresh_summary(repaired_freshness)} |",
-        f"| `max_age_days` | `{corrupted_freshness.get('max_age_days', MISSING)}` "
+        "| Thuộc tính | Baseline | Corrupted | Repaired |",
+        "| --- | --- | --- | --- |",
+        f"| Trạng thái | {_fresh_summary(baseline_freshness)} | {_fresh_summary(corrupted_freshness)} "
+        f"| {_fresh_summary(repaired_freshness)} |",
+        f"| `max_age_days` | `{baseline_freshness.get('max_age_days', MISSING)}` "
+        f"| `{corrupted_freshness.get('max_age_days', MISSING)}` "
         f"| `{repaired_freshness.get('max_age_days', MISSING)}` |",
-        f"| `latest_published` | `{corrupted_freshness.get('latest_published', MISSING)}` "
+        f"| `latest_published` | `{baseline_freshness.get('latest_published', MISSING)}` "
+        f"| `{corrupted_freshness.get('latest_published', MISSING)}` "
         f"| `{repaired_freshness.get('latest_published', MISSING)}` |",
-        f"| `oldest_published` | `{corrupted_freshness.get('oldest_published', MISSING)}` "
+        f"| `oldest_published` | `{baseline_freshness.get('oldest_published', MISSING)}` "
+        f"| `{corrupted_freshness.get('oldest_published', MISSING)}` "
         f"| `{repaired_freshness.get('oldest_published', MISSING)}` |",
         "",
         "## 4. Kết luận rút ra từ số liệu",
