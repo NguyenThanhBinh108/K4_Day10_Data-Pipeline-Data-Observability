@@ -248,10 +248,10 @@ Giải thích cách repair đảm bảo dữ liệu được phục hồi từ n
 
 | Metric/signal            | Baseline | Corrupted | Repaired | Thay đổi do corruption | Mức phục hồi | Nhận xét   |
 | ------------------------ | -------: | --------: | -------: | -----------------------: | --------------: | ------------ |
-| `retrieval_hit_rate`   |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
-| `mean_token_f1`        |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
-| `judge_accuracy`       |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
-| `mean_judge_score`     |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
+| `retrieval_hit_rate`   | 1.000 | 0.826 | Chưa có artifact | -0.174 | Chờ repair flow | Corruption làm mất/méo một số tài liệu nên retrieval hit giảm |
+| `mean_token_f1`        | 1.000 | 0.658 | Chưa có artifact | -0.342 | Chờ repair flow | Blank summary, truncate title và noise làm answer overlap giảm |
+| `judge_accuracy`       | 1.000 | 0.652 | Chưa có artifact | -0.348 | Chờ repair flow | Heuristic judge/fallback đánh giá nhiều câu corrupted không còn đúng |
+| `mean_judge_score`     | 5.000 | 3.609 | Chưa có artifact | -1.391 | Chờ repair flow | Điểm judge giảm cùng chiều với quality/freshness failure |
 | Quality checks pass/fail | 6/0 | 3/3 | Chưa có artifact | -3 check pass, +3 check fail | Chờ repair flow | Corrupted fail đúng các signal `paper_id_unique`, `summary_min_length`, `freshness_age_days` |
 | Freshness status         | Fresh (`stale_rows=0`) | Stale (`stale_rows=6`) | Chưa có artifact | `is_fresh` đổi từ `true` sang `false` | Chờ repair flow | `stale_dates` làm `max_age_days` tăng từ 175 lên 975 |
 
