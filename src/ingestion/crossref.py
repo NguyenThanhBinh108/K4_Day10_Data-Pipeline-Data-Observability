@@ -1,4 +1,4 @@
-"""Crossref ingestion — Contract A.
+"""Crossref ingestion - Contract A.
 
 Owner: R1 (Nguyen Thanh Binh).
 
@@ -109,7 +109,7 @@ def _effective_published(issued: str, created: str) -> str:
     nam o TUONG LAI (so tap chi sap phat hanh). Lay truc tiep lam moc freshness thi
     `age_days` ra so AM va toan bo phan freshness monitoring mat y nghia.
 
-    `created` la thoi diem ban ghi thuc su duoc nap vao Crossref — luon o qua khu.
+    `created` la thoi diem ban ghi thuc su duoc nap vao Crossref - luon o qua khu.
     Lay min cua hai gia tri cho ra ngay som nhat ma paper thuc su ton tai.
     """
     candidates = [value for value in (issued, created) if value]
@@ -147,7 +147,7 @@ def _parse_pdf_url(node: Any) -> str:
 def parse_crossref_payload(payload: dict, max_age_days: int | None = None) -> list[PaperRecord]:
     """Parse Crossref payload thanh list PaperRecord theo Contract A.
 
-    Bo record thieu DOI, thieu title, abstract qua ngan hoac khong parse duoc ngay xuat ban —
+    Bo record thieu DOI, thieu title, abstract qua ngan hoac khong parse duoc ngay xuat ban -
     day la nhung record khong the lam document RAG tu te.
 
     `max_age_days` ap lai cua so tuoi tren ngay HIEU LUC. Can buoc nay vi filter
@@ -224,7 +224,7 @@ def _request_with_retry(params: dict[str, Any]) -> dict:
 
         if attempt < MAX_ATTEMPTS - 1:
             backoff = 2**attempt
-            print(f"[crossref] {last_error} — thu lai sau {backoff}s ({attempt + 1}/{MAX_ATTEMPTS})")
+            print(f"[crossref] {last_error} - thu lai sau {backoff}s ({attempt + 1}/{MAX_ATTEMPTS})")
             time.sleep(backoff)
 
     raise RuntimeError(f"Crossref request failed after {MAX_ATTEMPTS} attempts: {last_error}")

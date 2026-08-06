@@ -1,4 +1,4 @@
-"""Bang chung lineage cho khoi data — deliverable CP2 va CP6 cua R1.
+"""Bang chung lineage cho khoi data - deliverable CP2 va CP6 cua R1.
 
 Chay doc lap, KHONG ghi gi vao data/, khong can chromadb hay LLM.
 
@@ -30,7 +30,7 @@ failures: list[str] = []
 
 def check(label: str, condition: bool, detail: str = "") -> bool:
     mark = "PASS" if condition else "FAIL"
-    print(f"  [{mark}] {label}" + (f" — {detail}" if detail else ""))
+    print(f"  [{mark}] {label}" + (f" - {detail}" if detail else ""))
     if not condition:
         failures.append(label)
     return condition
@@ -50,7 +50,7 @@ def section(title: str) -> None:
 
 
 def trace_one_paper(settings: Settings, paper_id: str, clean: pd.DataFrame) -> None:
-    """Buoc 1 — mot paper_id phai xuat hien nguyen ven o ca 4 tang."""
+    """Buoc 1 - mot paper_id phai xuat hien nguyen ven o ca 4 tang."""
     section(f"1. LINEAGE cua paper_id: {paper_id}")
 
     payload = read_json(settings.paths.raw_api_response)
@@ -88,7 +88,7 @@ def trace_one_paper(settings: Settings, paper_id: str, clean: pd.DataFrame) -> N
 
 
 def verify_corruption(settings: Settings, clean: pd.DataFrame) -> None:
-    """Buoc 2 — corrupted dataset phai lech dung nhu corruption_log khai bao."""
+    """Buoc 2 - corrupted dataset phai lech dung nhu corruption_log khai bao."""
     section("2. CORRUPTION co dung nhu log khai bao khong")
 
     corrupted = load_clean(settings.paths.corrupted_clean_csv)
@@ -160,7 +160,7 @@ def verify_corruption(settings: Settings, clean: pd.DataFrame) -> None:
 
 
 def verify_repair(settings: Settings, clean: pd.DataFrame) -> None:
-    """Buoc 3 — repair phai chay lai cleaning tu raw, khong phai copy baseline."""
+    """Buoc 3 - repair phai chay lai cleaning tu raw, khong phai copy baseline."""
     section("3. REPAIR tu raw co khoi phuc dung baseline khong")
 
     repaired = build_clean_dataframe(load_raw_records(settings.paths.raw_records_json), now_utc())
@@ -198,7 +198,7 @@ def main() -> int:
         paper_id = dropped[0]
 
     print("=" * 78)
-    print("VERIFY DATA LINEAGE — R1 (ingestion / cleaning / corruption)")
+    print("VERIFY DATA LINEAGE - R1 (ingestion / cleaning / corruption)")
     print("=" * 78)
 
     trace_one_paper(settings, paper_id, clean)
