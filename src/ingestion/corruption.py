@@ -110,8 +110,14 @@ def corrupt_clean_dataframe(df: pd.DataFrame, output_log_path: Path) -> pd.DataF
     )
 
     # 3. Noise trong summary — mo phong loi encoding/scraping lam ban text.
-    noise_pool = corrupted[~corrupted["paper_id"].isin(blank_ids)]
-    noise_ids = _spread_ratio(noise_pool, NOISE_RATIO, offset=1)
+    # Chon tren TOAN BO frame roi moi tru cac dong da blank, khong chon tren frame da loc:
+    # loc truoc lam toa do dich di dung bang chenh lech offset, khien kich ban nay va
+    # `truncate_title` roi vao dung mot nhom dong (da gap thuc te: trung 4/4 paper_id).
+    noise_ids = [
+        paper_id
+        for paper_id in _spread_ratio(corrupted, NOISE_RATIO, offset=1)
+        if paper_id not in set(blank_ids)
+    ]
     noise_mask = corrupted["paper_id"].isin(noise_ids)
     corrupted.loc[noise_mask, "summary"] = corrupted.loc[noise_mask, "summary"] + NOISE_TEXT
     operations.append(
