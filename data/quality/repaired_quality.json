@@ -1,6 +1,6 @@
 {
-  "report_name": "corrupted_quality",
-  "generated_at": "2026-08-06T09:28:20.293782+00:00",
+  "report_name": "repaired_quality",
+  "generated_at": "2026-08-06T09:29:07.371732+00:00",
   "total_rows": 23,
   "checks": [
     {
@@ -21,8 +21,8 @@
       "name": "paper_id_unique",
       "dimension": "Uniqueness",
       "expected": "== 0",
-      "observed": 3,
-      "success": false
+      "observed": 0,
+      "success": true
     },
     {
       "name": "title_not_empty",
@@ -35,18 +35,18 @@
       "name": "summary_min_length",
       "dimension": "Validity",
       "expected": "== 0",
-      "observed": 5,
-      "success": false
+      "observed": 0,
+      "success": true
     },
     {
       "name": "freshness_age_days",
       "dimension": "Timeliness",
       "expected": "== 0",
-      "observed": 6,
-      "success": false
+      "observed": 0,
+      "success": true
     }
   ],
-  "success_count": 3,
-  "failed_count": 3,
-  "success": false
+  "success_count": 6,
+  "failed_count": 0,
+  "success": true
 }

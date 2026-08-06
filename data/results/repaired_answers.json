@@ -286,7 +286,7 @@
     "judge": {
       "score": 5,
       "correct": true,
-      "reasoning": "The model answer is identical to the reference answer, accurately summarizing the paper's focus on the rapid adoption of AI systems and the challenges organizations face in adapting their governance practices."
+      "reasoning": "The model answer is identical to the reference answer, accurately summarizing the paper's content."
     }
   },
   {
@@ -373,7 +373,7 @@
     "judge": {
       "score": 5,
       "correct": true,
-      "reasoning": "The model answer is identical to the reference answer, accurately summarizing the paper's focus on the accessibility issues of fragmented digital fatwas from MUI."
+      "reasoning": "The model answer is identical to the reference answer, accurately summarizing the paper's focus on the accessibility issues of fragmented digital fatwa documents."
     }
   },
   {
@@ -460,7 +460,7 @@
     "judge": {
       "score": 5,
       "correct": true,
-      "reasoning": "The model answer is identical to the reference answer, accurately summarizing the key focus of the paper."
+      "reasoning": "The model answer is identical to the reference answer, accurately summarizing the key points of the paper."
     }
   },
   {
