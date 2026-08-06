@@ -206,18 +206,26 @@ Giải thích vì sao test set được giữ nguyên khi đánh giá baseline, 
 
 | Check        | Quality dimension | Ngưỡng/kỳ vọng | Kết quả baseline      | Bằng chứng |
 | ------------ | ----------------- | ------------------ | ----------------------- | ------------ |
-| [Tên check] | [Dimension]       | [Ngưỡng]         | [Pass/Fail + giá trị] | [Artifact]   |
-| [Tên check] | [Dimension]       | [Ngưỡng]         | [Pass/Fail + giá trị] | [Artifact]   |
+| `row_count_min` | Completeness | `>= 10` | Pass, observed `23` | `data/quality/baseline_quality.json` |
+| `paper_id_not_null` | Completeness | `== 0` | Pass, observed `0` | `data/quality/baseline_quality.json` |
+| `paper_id_unique` | Uniqueness | `== 0` | Pass, observed `0` | `data/quality/baseline_quality.json` |
+| `title_not_empty` | Completeness | `== 0` | Pass, observed `0` | `data/quality/baseline_quality.json` |
+| `summary_min_length` | Validity | `== 0` | Pass, observed `0` | `data/quality/baseline_quality.json` |
+| `freshness_age_days` | Timeliness | `== 0` | Pass, observed `0` | `data/quality/baseline_quality.json` |
+
+Baseline quality report có `success_count=6`, `failed_count=0`, `success=true` trên 23 dòng clean data. Sau corruption, `data/quality/corrupted_quality.json` cho thấy `success_count=3`, `failed_count=3`, `success=false`; các check fail là `paper_id_unique` observed `3`, `summary_min_length` observed `5`, và `freshness_age_days` observed `6`. Kết quả này khớp với `data/results/corruption_log.json`: `duplicate_rows`, `blank_summary`, và `stale_dates` là các corruption có signal trực tiếp trên quality/freshness.
 
 ### Freshness
 
 | Thuộc tính               | Giá trị                           |
 | -------------------------- | ----------------------------------- |
-| Freshness được đo tại | [Dataset/index/artifact]            |
-| Timestamp mới nhất       | [Giá trị]                         |
-| Ngưỡng freshness         | [Giá trị]                         |
-| Trạng thái baseline      | [Fresh/Stale/Unknown]               |
-| Lý do                     | [Giải thích dựa trên số liệu] |
+| Freshness được đo tại | `data/clean/papers_clean.csv`, report `data/quality/freshness_report.json` |
+| Timestamp mới nhất       | `2026-08-01` |
+| Ngưỡng freshness         | `180` ngày |
+| Trạng thái baseline      | Fresh, `is_fresh=true` |
+| Lý do                     | Baseline có `stale_rows=0`, `max_age_days=175`, `total_rows=23`, nên không dòng nào vượt ngưỡng 180 ngày. |
+
+Corrupted freshness được lưu ở `data/quality/freshness_report_corrupted.json`: `is_fresh=false`, `stale_rows=6`, `max_age_days=975`, `latest_published=2026-07-03`, `oldest_published=2023-12-05`. Điều này xác nhận corruption `stale_dates` đã làm dữ liệu lỗi thời và được observability phát hiện trước khi dùng làm căn cứ trả lời.
 
 ## 9. Corruption scenarios và repair
 
@@ -244,8 +252,8 @@ Giải thích cách repair đảm bảo dữ liệu được phục hồi từ n
 | `mean_token_f1`        |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
 | `judge_accuracy`       |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
 | `mean_judge_score`     |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
-| Quality checks pass/fail |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
-| Freshness status         |      [ ] |       [ ] |      [ ] |                      [ ] |             [ ] | [Nhận xét] |
+| Quality checks pass/fail | 6/0 | 3/3 | Chưa có artifact | -3 check pass, +3 check fail | Chờ repair flow | Corrupted fail đúng các signal `paper_id_unique`, `summary_min_length`, `freshness_age_days` |
+| Freshness status         | Fresh (`stale_rows=0`) | Stale (`stale_rows=6`) | Chưa có artifact | `is_fresh` đổi từ `true` sang `false` | Chờ repair flow | `stale_dates` làm `max_age_days` tăng từ 175 lên 975 |
 
 Nêu ít nhất hai kết luận có quan hệ nhân quả được hỗ trợ bởi artifacts:
 
