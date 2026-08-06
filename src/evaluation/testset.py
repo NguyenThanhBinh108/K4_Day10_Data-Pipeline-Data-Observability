@@ -12,20 +12,24 @@ MIN_QUESTIONS = 20
 MAX_QUESTIONS = 32
 MIN_NEWEST = 2
 
-QUESTION_TYPES = ["summary", "authors", "date", "categories"]
+# KHONG them "categories" vao day — xem Contract C trong DATA_CONTRACT.md.
+# Crossref tra `subject` rong 23/23 ban ghi nen `categories_joined` = "uncategorized"
+# o MOI paper. Cau hoi loai nay se co ground_truth giong het nhau, va vi qa.py tra
+# thang metadata["categories_joined"] nen token_f1 = 1.0 BAT KE retrieval tra ve paper
+# nao. Do la diem cho khong: baseline bi thoi phong va corruption khong the lam nhom
+# cau hoi do giam, che mat impact that.
+QUESTION_TYPES = ["summary", "authors", "date"]
 
 _QUESTION_TEMPLATES = {
     "summary": "Give a one-sentence summary of the paper '{title}'.",
     "authors": "Who authored the paper '{title}'?",
     "date": "When was the paper '{title}' published?",
-    "categories": "What categories does the paper '{title}' belong to?",
 }
 
 _GROUND_TRUTH_FIELDS = {
     "summary": "summary",
     "authors": "authors_joined",
     "date": "published",
-    "categories": "categories_joined",
 }
 
 
@@ -81,14 +85,17 @@ def _validate_doc_ids(questions: list[dict[str, Any]], valid_ids: set[str]) -> N
 
 
 def build_test_set(df: pd.DataFrame, output_path) -> list[dict[str, Any]]:
-    """TODO(student): tao bo evaluation set tu cleaned dataframe.
+    """Tao evaluation set tu cleaned dataframe theo Contract C.
 
-    Pseudo-code:
-    1. Kiem tra so luong document toi thieu.
-    2. Chon mot so paper dai dien (cam bao >= 2 paper moi nhat).
-    3. Tao nhieu loai cau hoi: summary, authors, date, categories.
-    4. Moi row chua: id, question_type, question, ground_truth, ground_truth_doc_ids.
-    5. Ghi file JSON vao output_path.
+    Duyet paper theo thu tu moi nhat truoc va xoay vong question_type, nen moi paper
+    deu co it nhat mot cau hoi va cac paper moi nhat luon nam trong test set — dieu kien
+    de corruption `drop_latest_records` do duoc impact len retrieval.
+
+    Moi row: id, question_type, question, ground_truth, ground_truth_doc_ids.
+    Cau hoi luon boc title trong nhay don de qa.py lookup exact duoc.
+
+    Test set sinh MOT lan roi khoa: baseline, corrupted va repaired deu danh gia tren
+    dung file nay, neu khong bang so sanh ba trang thai mat y nghia.
     """
     _required_columns(df)
 
