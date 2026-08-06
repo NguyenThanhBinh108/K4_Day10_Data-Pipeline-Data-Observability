@@ -1,14 +1,15 @@
-"""Markdown reporting — Contract D (quality) + Contract F (metrics) la input.
+"""Markdown reporting - Contract D (quality) + Contract F (metrics) la input.
 
 Owner: R4 (Trinh Hai Dang).
 
-Hai bao cao deu **chi doc so tu artifact that** va tinh delta bang code. Khong hardcode
-so lieu, khong lam tron de nhin dep hon. Neu mot trang thai chua chay thi in ro la chua
-co du lieu chu khong doan.
+Ca hai ham chi doc so tu artifact that (dict duoc phase1.py / corruption_flow.py
+truyen vao sau khi da ghi ra data/results va data/quality) roi lap Markdown. Khong
+tu tinh lai metric, khong hardcode con so, khong lam tron cho "dep". Neu mot khoa
+bi thieu thi in dau gach ngang thay vi doan hoac lam vo report.
 
-Nguyen tac quan trong nhat cua `generate_corruption_report`: **khong ket luan qua muc**.
-Bao cao tu liet ke ca cac tin hieu KHONG doi giua baseline va corrupted, de nguoi doc
-biet corruption anh huong toi dau chu khong tuong moi thu deu bi anh huong.
+`generate_corruption_report` la noi de nguoi doc doi chieu 3 trang thai (baseline,
+corrupted, repaired). Cot delta va muc phuc hoi phai tinh bang code tu chinh 3 file
+metrics, khong go tay - neu go tay thi con so se lech moi lan pipeline chay lai.
 """
 
 from __future__ import annotations
@@ -17,42 +18,47 @@ from typing import Any
 
 from core.utils import now_utc, write_text
 
-# Cac metric so hoc trong Contract F. "ragas" bi bo qua vi la dict long nhau.
-METRIC_KEYS = [
-    ("retrieval_hit_rate", "Tỉ lệ câu hỏi truy hồi trúng ít nhất một ground-truth document"),
-    ("mean_token_f1", "Trung bình token-F1 giữa câu trả lời và ground truth"),
-    ("judge_accuracy", "Tỉ lệ câu được LLM judge chấm là đúng về bản chất"),
-    ("mean_judge_score", "Điểm trung bình của judge, thang 1-5"),
-]
-
 MISSING = "—"
 
+# Bon metric so hoc trong Contract F. "ragas" khong nam trong list nay vi la dict
+# long nhau (co the co "skipped" hoac "error" thay vi so).
+METRIC_KEYS: list[tuple[str, str]] = [
+    ("retrieval_hit_rate", "Ti le cau hoi truy hoi trung it nhat mot ground-truth document"),
+    ("mean_token_f1", "Trung binh token-F1 giua cau tra loi va ground truth"),
+    ("judge_accuracy", "Ti le cau duoc LLM judge cham la dung ve ban chat"),
+    ("mean_judge_score", "Diem trung binh cua judge, thang 1-5"),
+]
 
-def _num(value: Any, digits: int = 4) -> str:
-    """Format so; tra ve dau gach neu khong phai so (chua chay, hoac loi)."""
+
+def _fmt_number(value: Any, digits: int = 4) -> str:
+    """Format mot gia tri so; tra dau gach neu khong phai so (chua chay / loi)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return MISSING
-    return f"{value:.{digits}f}".rstrip("0").rstrip(".") if digits else str(value)
+    text = f"{value:.{digits}f}"
+    return text.rstrip("0").rstrip(".") if digits else text
 
 
-def _delta(after: Any, before: Any, digits: int = 4) -> str:
-    """Chenh lech co dau. Dung cho cot 'thay doi do corruption'."""
+def _fmt_delta(after: Any, before: Any, digits: int = 4) -> str:
+    """Chenh lech co dau giua hai gia tri so, dung cho cot 'thay doi do corruption'."""
     if not isinstance(after, (int, float)) or not isinstance(before, (int, float)):
         return MISSING
     if isinstance(after, bool) or isinstance(before, bool):
         return MISSING
     diff = after - before
-    return f"{diff:+.{digits}f}".rstrip("0").rstrip(".") if diff else "0"
+    if abs(diff) < 1e-12:
+        return "0"
+    return f"{diff:+.{digits}f}".rstrip("0").rstrip(".")
 
 
-def _recovery(baseline: Any, corrupted: Any, repaired: Any) -> str:
-    """Muc phuc hoi: repaired da lay lai bao nhieu phan cua khoang bi mat.
+def _fmt_recovery(baseline: Any, corrupted: Any, repaired: Any) -> str:
+    """% cua khoang bi mat (baseline - corrupted) ma repaired lay lai duoc.
 
-    100% = ve dung baseline. 0% = khong phuc hoi gi. Am = con te hon corrupted.
-    Tra dau gach khi corruption khong lam metric thay doi (khong co gi de phuc hoi).
+    100% nghia la repaired dung bang baseline, 0% nghia la khong phuc hoi gi,
+    am nghia la repaired con te hon corrupted. "n/a" khi corruption khong lam
+    metric doi (khong co gi de phuc hoi).
     """
     values = (baseline, corrupted, repaired)
-    if any(not isinstance(v, (int, float)) or isinstance(v, bool) for v in values):
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in values):
         return MISSING
     lost = baseline - corrupted
     if abs(lost) < 1e-12:
@@ -60,7 +66,7 @@ def _recovery(baseline: Any, corrupted: Any, repaired: Any) -> str:
     return f"{(repaired - corrupted) / lost * 100:.0f}%"
 
 
-def _flag(value: Any) -> str:
+def _fmt_flag(value: Any) -> str:
     if value is True:
         return "PASS"
     if value is False:
@@ -68,104 +74,103 @@ def _flag(value: Any) -> str:
     return MISSING
 
 
-def _quality_summary(quality: dict[str, Any]) -> str:
+def _quality_line(quality: dict[str, Any]) -> str:
     if not quality:
         return MISSING
-    passed, failed = quality.get("success_count"), quality.get("failed_count")
+    passed = quality.get("success_count")
+    failed = quality.get("failed_count")
     if passed is None or failed is None:
         return MISSING
     return f"{passed}/{passed + failed} pass"
 
 
-def _fresh_summary(freshness: dict[str, Any]) -> str:
-    if not freshness:
-        return MISSING
-    if "is_fresh" not in freshness:
+def _freshness_line(freshness: dict[str, Any]) -> str:
+    if not freshness or "is_fresh" not in freshness:
         return MISSING
     state = "Fresh" if freshness["is_fresh"] else "Stale"
     return f"{state} (stale_rows={freshness.get('stale_rows', MISSING)})"
 
 
-def _source_table(source_summary: dict[str, Any]) -> list[str]:
-    """Render source_summary. Cac khoa duoi day do phase1.py truyen vao.
+def _source_summary_table(source_summary: dict[str, Any]) -> list[str]:
+    """Render source_summary do phase1.py truyen vao.
 
-    Khoa nao thieu se hien dau gach thay vi lam vo bao cao, nen phase1 co the bo sung
-    dan ma khong phai sua file nay.
+    Danh sach nhan duoi day chi la thu tu hien thi uu tien; khoa la khong co
+    trong danh sach van duoc in ra o cuoi bang thay vi bi bo qua, de phase1.py
+    co the them truong moi ma khong phai sua file nay.
     """
-    labels = [
-        ("source", "Nguồn"),
+    known_labels = [
+        ("source", "Nguon"),
         ("query", "Query"),
         ("filter", "Filter"),
-        ("fetched_at", "Thời điểm lấy dữ liệu"),
-        ("raw_records", "Số raw record"),
-        ("clean_rows", "Số dòng sau cleaning"),
-        ("dropped", "Số record bị loại khi cleaning"),
+        ("fetched_at", "Thoi diem lay du lieu"),
+        ("raw_records", "So raw record"),
+        ("clean_rows", "So dong sau cleaning"),
+        ("dropped", "So record bi loai khi cleaning"),
         ("embedding_model", "Embedding model"),
         ("collection", "Vector collection"),
         ("top_k", "Retrieval top_k"),
         ("llm_provider", "LLM provider"),
         ("llm_model", "LLM model"),
     ]
-    lines = ["| Thuộc tính | Giá trị |", "| --- | --- |"]
-    for key, label in labels:
+    lines = ["| Thuoc tinh | Gia tri |", "| --- | --- |"]
+    for key, label in known_labels:
         if key in source_summary:
             lines.append(f"| {label} | `{source_summary[key]}` |")
-    # Khoa la do phase1 tu them: van in ra thay vi bo di am tham.
-    known = {key for key, _ in labels}
+    known_keys = {key for key, _ in known_labels}
     for key, value in source_summary.items():
-        if key not in known:
+        if key not in known_keys:
             lines.append(f"| {key} | `{value}` |")
     return lines
 
 
 def _metrics_table(metrics: dict[str, Any]) -> list[str]:
-    lines = ["| Metric | Giá trị | Ý nghĩa |", "| --- | ---: | --- |"]
+    lines = ["| Metric | Gia tri | Y nghia |", "| --- | ---: | --- |"]
     for key, meaning in METRIC_KEYS:
         digits = 2 if key == "mean_judge_score" else 4
-        lines.append(f"| `{key}` | {_num(metrics.get(key), digits)} | {meaning} |")
-    lines.append(f"| `samples` | {metrics.get('samples', MISSING)} | Số câu hỏi trong test set |")
+        lines.append(f"| `{key}` | {_fmt_number(metrics.get(key), digits)} | {meaning} |")
+    lines.append(f"| `samples` | {metrics.get('samples', MISSING)} | So cau hoi trong test set |")
 
     ragas = metrics.get("ragas")
     if isinstance(ragas, dict) and "skipped" in ragas:
-        lines.append(f"| `ragas` | {MISSING} | Bỏ qua — đặt `RUN_RAGAS=1` để bật |")
+        lines.append(f"| `ragas` | {MISSING} | Bo qua - dat `RUN_RAGAS=1` de bat |")
     elif isinstance(ragas, dict) and "error" in ragas:
-        lines.append(f"| `ragas` | {MISSING} | Lỗi: {ragas['error']} |")
+        lines.append(f"| `ragas` | {MISSING} | Loi: {ragas['error']} |")
     elif isinstance(ragas, dict) and ragas:
         for key, value in ragas.items():
-            lines.append(f"| `ragas.{key}` | {_num(value)} | |")
+            lines.append(f"| `ragas.{key}` | {_fmt_number(value)} | |")
     return lines
 
 
-def _checks_table(quality: dict[str, Any]) -> list[str]:
+def _quality_checks_table(quality: dict[str, Any]) -> list[str]:
     checks = quality.get("checks") or []
     if not checks:
-        return ["_Chưa có quality check nào._"]
+        return ["_Chua co quality check nao._"]
     lines = [
-        "| Check | Dimension | Kỳ vọng | Quan sát | Kết quả |",
+        "| Check | Dimension | Ky vong | Quan sat | Ket qua |",
         "| --- | --- | --- | ---: | --- |",
     ]
     for check in checks:
         lines.append(
             f"| `{check.get('name', MISSING)}` | {check.get('dimension', MISSING)} "
             f"| `{check.get('expected', MISSING)}` | {check.get('observed', MISSING)} "
-            f"| {_flag(check.get('success'))} |"
+            f"| {_fmt_flag(check.get('success'))} |"
         )
     return lines
 
 
 def _freshness_table(freshness: dict[str, Any]) -> list[str]:
     if not freshness:
-        return ["_Chưa có freshness report._"]
+        return ["_Chua co freshness report._"]
     rows = [
-        ("Ngưỡng freshness", f"{freshness.get('threshold_days', MISSING)} ngày"),
-        ("Published mới nhất", freshness.get("latest_published", MISSING)),
-        ("Published cũ nhất", freshness.get("oldest_published", MISSING)),
-        ("age_days lớn nhất", freshness.get("max_age_days", MISSING)),
-        ("Số dòng quá hạn", freshness.get("stale_rows", MISSING)),
-        ("Tổng số dòng", freshness.get("total_rows", MISSING)),
-        ("Trạng thái", "Fresh" if freshness.get("is_fresh") else "Stale"),
+        ("Nguong freshness", f"{freshness.get('threshold_days', MISSING)} ngay"),
+        ("Published moi nhat", freshness.get("latest_published", MISSING)),
+        ("Published cu nhat", freshness.get("oldest_published", MISSING)),
+        ("age_days lon nhat", freshness.get("max_age_days", MISSING)),
+        ("So dong qua han", freshness.get("stale_rows", MISSING)),
+        ("Tong so dong", freshness.get("total_rows", MISSING)),
+        ("Trang thai", "Fresh" if freshness.get("is_fresh") else "Stale"),
     ]
-    return ["| Thuộc tính | Giá trị |", "| --- | --- |"] + [f"| {k} | `{v}` |" for k, v in rows]
+    return ["| Thuoc tinh | Gia tri |", "| --- | --- |"] + [f"| {k} | `{v}` |" for k, v in rows]
 
 
 def generate_phase1_report(
@@ -175,37 +180,37 @@ def generate_phase1_report(
     quality: dict[str, Any],
     freshness: dict[str, Any],
 ) -> None:
-    """Bao cao baseline: nguon du lieu, metrics, quality checks va freshness."""
-    failed = [c for c in (quality.get("checks") or []) if not c.get("success")]
+    """Bao cao baseline: nguon du lieu, evaluation metrics, quality checks va freshness."""
+    failed_checks = [c for c in (quality.get("checks") or []) if not c.get("success")]
 
     lines = [
-        "# Báo cáo Pha 1 — Baseline trên dữ liệu sạch",
+        "# Bao cao Pha 1 - Baseline tren du lieu sach",
         "",
-        f"_Sinh tự động lúc {now_utc().isoformat()} từ artifact thật trong `data/`._",
+        f"_Sinh tu dong luc {now_utc().isoformat()} tu artifact that trong `data/`._",
         "",
-        "## 1. Nguồn dữ liệu và cấu hình",
+        "## 1. Nguon du lieu va cau hinh",
         "",
-        *_source_table(source_summary),
+        *_source_summary_table(source_summary),
         "",
-        "## 2. Kết quả đánh giá",
+        "## 2. Ket qua danh gia",
         "",
         *_metrics_table(metrics),
         "",
         "## 3. Data quality checks",
         "",
-        f"**Tổng kết:** {_quality_summary(quality)} — "
-        f"trạng thái chung `{_flag(quality.get('success'))}` trên {quality.get('total_rows', MISSING)} dòng.",
+        f"**Tong ket:** {_quality_line(quality)} - trang thai chung "
+        f"`{_fmt_flag(quality.get('success'))}` tren {quality.get('total_rows', MISSING)} dong.",
         "",
-        *_checks_table(quality),
+        *_quality_checks_table(quality),
         "",
     ]
 
-    if failed:
+    if failed_checks:
+        details = ", ".join(f"`{c['name']}` (quan sat `{c['observed']}`)" for c in failed_checks)
         lines += [
-            "> **Cảnh báo:** baseline đã có check không đạt: "
-            + ", ".join(f"`{c['name']}` (quan sát `{c['observed']}`)" for c in failed)
-            + ". Phải xử lý trước khi chạy corruption flow, nếu không sẽ không phân biệt được "
-            "lỗi do corruption với lỗi có sẵn từ đầu.",
+            f"> **Canh bao:** baseline da co check khong dat: {details}. "
+            "Phai xu ly truoc khi chay corruption flow, neu khong se khong phan biet duoc "
+            "loi do corruption voi loi co san tu dau.",
             "",
         ]
 
@@ -214,12 +219,12 @@ def generate_phase1_report(
         "",
         *_freshness_table(freshness),
         "",
-        "## 5. Trạng thái",
+        "## 5. Trang thai",
         "",
-        f"- Data quality: `{_flag(quality.get('success'))}`",
-        f"- Freshness: `{_fresh_summary(freshness)}`",
-        "- Baseline này là mốc so sánh cho corrupted và repaired. "
-        "Cả ba trạng thái phải đánh giá trên cùng `data/eval/test_set.json`.",
+        f"- Data quality: `{_fmt_flag(quality.get('success'))}`",
+        f"- Freshness: `{_freshness_line(freshness)}`",
+        "- Baseline nay la moc so sanh cho corrupted va repaired. Ca ba trang thai phai "
+        "danh gia tren cung `data/eval/test_set.json`.",
         "",
     ]
     write_text(report_path, "\n".join(lines) + "\n")
@@ -237,42 +242,46 @@ def generate_corruption_report(
 ) -> None:
     """Bao cao so sanh baseline / corrupted / repaired.
 
-    Cot delta va muc phuc hoi deu tinh bang code tu ba file metrics that.
+    Cot delta va muc phuc hoi tinh hoan toan bang code tu ba file metrics that,
+    khong go tay so lieu.
     """
     baseline_metrics = baseline_metrics or {}
     corrupted_metrics = corrupted_metrics or {}
     repaired_metrics = repaired_metrics or {}
 
     lines = [
-        "# Báo cáo so sánh — Baseline / Corrupted / Repaired",
+        "# Bao cao so sanh - Baseline / Corrupted / Repaired",
         "",
-        f"_Sinh tự động lúc {now_utc().isoformat()} từ `data/results/*_metrics.json`, "
-        "`data/quality/*.json` và `data/results/corruption_log.json`._",
+        f"_Sinh tu dong luc {now_utc().isoformat()} tu `data/results/*_metrics.json`, "
+        "`data/quality/*.json` va `data/results/corruption_log.json`._",
         "",
-        "Cả ba trạng thái được đánh giá trên **cùng một** `data/eval/test_set.json`, "
-        "cùng embedding model và cùng `top_k`. Nếu không, các cột dưới đây không so sánh được.",
+        "Ca ba trang thai duoc danh gia tren **cung mot** `data/eval/test_set.json`, cung "
+        "embedding model va cung `top_k`. Neu khong, cac cot duoi day khong so sanh duoc.",
         "",
-        "## 1. Bảng so sánh metrics",
+        "## 1. Bang so sanh metrics",
         "",
-        "| Metric | Baseline | Corrupted | Repaired | Δ corruption | Mức phục hồi |",
+        "| Metric | Baseline | Corrupted | Repaired | Delta corruption | Muc phuc hoi |",
         "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
 
-    unchanged: list[str] = []
-    degraded: list[tuple[str, Any, Any]] = []
+    unchanged_metrics: list[str] = []
+    degraded_metrics: list[tuple[str, Any, Any]] = []
 
     for key, _ in METRIC_KEYS:
         digits = 2 if key == "mean_judge_score" else 4
-        base, corr, rep = (m.get(key) for m in (baseline_metrics, corrupted_metrics, repaired_metrics))
+        base = baseline_metrics.get(key)
+        corr = corrupted_metrics.get(key)
+        rep = repaired_metrics.get(key)
         lines.append(
-            f"| `{key}` | {_num(base, digits)} | {_num(corr, digits)} | {_num(rep, digits)} "
-            f"| {_delta(corr, base, digits)} | {_recovery(base, corr, rep)} |"
+            f"| `{key}` | {_fmt_number(base, digits)} | {_fmt_number(corr, digits)} "
+            f"| {_fmt_number(rep, digits)} | {_fmt_delta(corr, base, digits)} "
+            f"| {_fmt_recovery(base, corr, rep)} |"
         )
         if isinstance(base, (int, float)) and isinstance(corr, (int, float)):
             if abs(base - corr) < 1e-12:
-                unchanged.append(key)
+                unchanged_metrics.append(key)
             elif corr < base:
-                degraded.append((key, base, corr))
+                degraded_metrics.append((key, base, corr))
 
     lines += [
         "",
@@ -282,31 +291,31 @@ def generate_corruption_report(
         "| --- | --- | --- | --- |",
     ]
 
-    # Baseline quality khong nam trong tham so cua ham nay theo contract, nen cot baseline
-    # duoc suy tu chinh corrupted/repaired: mot check chi co the "hong" neu truoc do dat.
+    # Baseline quality khong nam trong tham so ham nay (contract chi truyen corrupted
+    # + repaired) - cot baseline tro nguoi doc sang phase1_report.md thay vi doan lai.
     corrupted_checks = {c["name"]: c for c in (corrupted_quality.get("checks") or [])}
     repaired_checks = {c["name"]: c for c in (repaired_quality.get("checks") or [])}
-    flipped: list[str] = []
+    flipped_checks: list[str] = []
 
     for name in list(corrupted_checks) or list(repaired_checks):
         corr_check = corrupted_checks.get(name, {})
         rep_check = repaired_checks.get(name, {})
-        corr_cell = f"{_flag(corr_check.get('success'))} (`{corr_check.get('observed', MISSING)}`)"
-        rep_cell = f"{_flag(rep_check.get('success'))} (`{rep_check.get('observed', MISSING)}`)"
+        corr_cell = f"{_fmt_flag(corr_check.get('success'))} (`{corr_check.get('observed', MISSING)}`)"
+        rep_cell = f"{_fmt_flag(rep_check.get('success'))} (`{rep_check.get('observed', MISSING)}`)"
         lines.append(f"| `{name}` | xem `phase1_report.md` | {corr_cell} | {rep_cell} |")
         if corr_check.get("success") is False:
-            flipped.append(name)
+            flipped_checks.append(name)
 
     lines += [
         "",
-        f"- Corrupted: {_quality_summary(corrupted_quality)}, tổng `{_flag(corrupted_quality.get('success'))}`",
-        f"- Repaired: {_quality_summary(repaired_quality)}, tổng `{_flag(repaired_quality.get('success'))}`",
+        f"- Corrupted: {_quality_line(corrupted_quality)}, tong `{_fmt_flag(corrupted_quality.get('success'))}`",
+        f"- Repaired: {_quality_line(repaired_quality)}, tong `{_fmt_flag(repaired_quality.get('success'))}`",
         "",
         "## 3. Freshness",
         "",
-        "| Thuộc tính | Corrupted | Repaired |",
+        "| Thuoc tinh | Corrupted | Repaired |",
         "| --- | --- | --- |",
-        f"| Trạng thái | {_fresh_summary(corrupted_freshness)} | {_fresh_summary(repaired_freshness)} |",
+        f"| Trang thai | {_freshness_line(corrupted_freshness)} | {_freshness_line(repaired_freshness)} |",
         f"| `max_age_days` | `{corrupted_freshness.get('max_age_days', MISSING)}` "
         f"| `{repaired_freshness.get('max_age_days', MISSING)}` |",
         f"| `latest_published` | `{corrupted_freshness.get('latest_published', MISSING)}` "
@@ -314,83 +323,86 @@ def generate_corruption_report(
         f"| `oldest_published` | `{corrupted_freshness.get('oldest_published', MISSING)}` "
         f"| `{repaired_freshness.get('oldest_published', MISSING)}` |",
         "",
-        "## 4. Kết luận rút ra từ số liệu",
+        "## 4. Ket luan rut ra tu so lieu",
         "",
     ]
 
-    if flipped:
-        lines.append(
-            f"1. Corruption làm {len(flipped)} quality check chuyển sang FAIL "
-            f"({', '.join(f'`{n}`' for n in flipped)}), "
-            + (
-                f"và freshness lật sang `is_fresh=false` (`max_age_days` = "
+    if flipped_checks:
+        flipped_text = ", ".join(f"`{n}`" for n in flipped_checks)
+        if corrupted_freshness.get("is_fresh") is False:
+            freshness_note = (
+                "va freshness lat sang `is_fresh=false` (`max_age_days` = "
                 f"`{corrupted_freshness.get('max_age_days', MISSING)}`)."
-                if corrupted_freshness.get("is_fresh") is False
-                else "trong khi freshness không đổi."
             )
+        else:
+            freshness_note = "trong khi freshness khong doi."
+        lines.append(
+            f"1. Corruption lam {len(flipped_checks)} quality check chuyen sang FAIL "
+            f"({flipped_text}), {freshness_note}"
         )
     else:
-        lines.append("1. Không quality check nào chuyển sang FAIL sau corruption.")
+        lines.append("1. Khong quality check nao chuyen sang FAIL sau corruption.")
 
-    if degraded:
-        worst = min(degraded, key=lambda item: item[2] - item[1])
+    if degraded_metrics:
+        worst_key, worst_base, worst_corr = min(degraded_metrics, key=lambda item: item[2] - item[1])
         lines.append(
-            f"2. Chất lượng agent giảm ở {len(degraded)} metric. Giảm mạnh nhất là "
-            f"`{worst[0]}`: {_num(worst[1])} → {_num(worst[2])} ({_delta(worst[2], worst[1])})."
+            f"2. Chat luong agent giam o {len(degraded_metrics)} metric. Giam manh nhat la "
+            f"`{worst_key}`: {_fmt_number(worst_base)} -> {_fmt_number(worst_corr)} "
+            f"({_fmt_delta(worst_corr, worst_base)})."
         )
     else:
         lines.append(
-            "2. **Không metric nào của agent giảm sau corruption.** Không được kết luận corruption "
-            "có tác động lên chất lượng trả lời. Cần kiểm tra: corruption có chạm vào các paper nằm "
-            "trong test set không, và `text_for_embedding` đã được build lại sau khi làm hỏng dữ liệu chưa."
+            "2. **Khong metric nao cua agent giam sau corruption.** Khong duoc ket luan corruption "
+            "co tac dong len chat luong tra loi. Can kiem tra: corruption co cham vao cac paper nam "
+            "trong test set khong, va `text_for_embedding` da duoc build lai sau khi lam hong du lieu chua."
         )
 
     if repaired_metrics:
-        recovered = [
+        recovered_metrics = [
             key
             for key, _ in METRIC_KEYS
             if isinstance(baseline_metrics.get(key), (int, float))
             and isinstance(repaired_metrics.get(key), (int, float))
             and abs(repaired_metrics[key] - baseline_metrics[key]) < 1e-9
         ]
-        lines.append(
-            f"3. Repair chạy lại cleaning từ `data/raw/crossref_records.json` và khôi phục "
-            f"{len(recovered)}/{len(METRIC_KEYS)} metric về đúng mức baseline"
-            + (f" ({', '.join(f'`{k}`' for k in recovered)})." if recovered else ".")
+        recovered_text = (
+            f" ({', '.join(f'`{k}`' for k in recovered_metrics)})." if recovered_metrics else "."
         )
-        if len(recovered) < len(METRIC_KEYS):
+        lines.append(
+            f"3. Repair chay lai cleaning tu `data/raw/crossref_records.json` va khoi phuc "
+            f"{len(recovered_metrics)}/{len(METRIC_KEYS)} metric ve dung muc baseline{recovered_text}"
+        )
+        if len(recovered_metrics) < len(METRIC_KEYS):
             lines.append(
-                "   Các metric còn lại chưa về đúng baseline — nêu rõ trong báo cáo nhóm kèm giả thuyết, "
-                "không được ghi là đã phục hồi hoàn toàn."
+                "   Cac metric con lai chua ve dung baseline - neu ro trong bao cao nhom kem gia "
+                "thuyet, khong duoc ghi la da phuc hoi hoan toan."
             )
     else:
-        lines.append("3. Chưa có `repaired_metrics.json` — chưa kết luận được về khả năng phục hồi.")
+        lines.append("3. Chua co `repaired_metrics.json` - chua ket luan duoc ve kha nang phuc hoi.")
 
     lines += [
         "",
-        "## 5. Giới hạn của kết luận",
+        "## 5. Gioi han cua ket luan",
         "",
     ]
 
-    if unchanged:
+    if unchanged_metrics:
+        unchanged_text = ", ".join(f"`{k}`" for k in unchanged_metrics)
         lines.append(
-            "- Các metric **không đổi** giữa baseline và corrupted: "
-            + ", ".join(f"`{k}`" for k in unchanged)
-            + ". Không được kết luận corruption ảnh hưởng lên những chỉ số này."
+            f"- Cac metric **khong doi** giua baseline va corrupted: {unchanged_text}. "
+            "Khong duoc ket luan corruption anh huong len nhung chi so nay."
         )
-    passed_after_corruption = [
-        name for name, check in corrupted_checks.items() if check.get("success") is True
-    ]
-    if passed_after_corruption:
+    still_passing = [name for name, check in corrupted_checks.items() if check.get("success") is True]
+    if still_passing:
+        still_passing_text = ", ".join(f"`{n}`" for n in still_passing)
         lines.append(
-            "- Các quality check **vẫn đạt** sau corruption: "
-            + ", ".join(f"`{n}`" for n in passed_after_corruption)
-            + ". Nghĩa là quality check không bắt được mọi dạng lỗi dữ liệu — "
-            "ví dụ nhiễu trong summary và title bị cắt chỉ lộ ra qua metric của agent."
+            f"- Cac quality check **van dat** sau corruption: {still_passing_text}. Nghia la quality "
+            "check khong bat duoc moi dang loi du lieu - vi du nhieu trong summary va title bi cat "
+            "chi lo ra qua metric cua agent."
         )
     lines += [
-        "- Crossref là nguồn sống nên số liệu giữa các nhóm sẽ khác nhau. "
-        "Chỉ so sánh trong cùng bài làm, trên cùng snapshot raw và cùng test set.",
+        "- Crossref la nguon song nen so lieu giua cac nhom se khac nhau. Chi so sanh trong cung "
+        "bai lam, tren cung snapshot raw va cung test set.",
         "",
     ]
     write_text(report_path, "\n".join(lines) + "\n")

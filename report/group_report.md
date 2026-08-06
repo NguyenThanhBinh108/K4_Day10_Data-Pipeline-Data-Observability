@@ -273,10 +273,12 @@ Mô tả một vấn đề phát sinh khi ghép các module trong pipeline và c
 
 ## 12. Giới hạn và hướng cải thiện
 
-| Giới hạn hiện tại | Ảnh hưởng   | Hướng cải thiện có thể kiểm chứng |
-| --------------------- | -------------- | ----------------------------------------- |
-| [Giới hạn]          | [Ảnh hưởng] | [Đề xuất]                              |
-| [Giới hạn]          | [Ảnh hưởng] | [Đề xuất]                              |
+| Giới hạn hiện tại | Ảnh hưởng | Hướng cải thiện có thể kiểm chứng |
+| --- | --- | --- |
+| Ragas bị bỏ qua mặc định (`RUN_RAGAS=1` mới bật) | Báo cáo chỉ có 4 metric tự viết (`retrieval_hit_rate`, `mean_token_f1`, `judge_accuracy`, `mean_judge_score`); thiếu góc nhìn từ bộ metric chuẩn hoá bên ngoài (faithfulness, answer relevancy) để đối chiếu chéo với judge tự viết | Chạy lại `run_phase1.py`/`run_corruption_flow.py` với `RUN_RAGAS=1`, so `ragas.*` trong `phase1_report.md`/`corruption_report.md` với 4 metric hiện có để xem có lệch hướng kết luận không |
+| `judge_accuracy`/`mean_judge_score` do một LLM judge chấm, không có second-opinion hay con người review | Một số case corrupted có thể bị chấm sai hướng (quá khắt khe hoặc quá dễ dãi) mà báo cáo không phát hiện được vì chỉ đọc số tổng hợp | Lấy ngẫu nhiên 3-5 câu trong `corrupted_answers.json` có `judge_score` thấp nhất, đối chiếu tay với `ground_truth`, ghi log bất đồng nếu có |
+| `generate_corruption_report` suy ra cột "Baseline" của bảng quality checks bằng cách trỏ người đọc sang `phase1_report.md` thay vì nhận trực tiếp `baseline_quality` làm tham số (đúng theo Contract D+F hiện tại nhưng làm bảng phải đọc chéo hai file) | Người đọc phải mở 2 file mới đối chiếu đủ 3 trạng thái quality trong cùng một chỗ | Nếu contract cho phép, mở rộng chữ ký `generate_corruption_report` nhận thêm `baseline_quality`, gộp cả 3 cột vào một bảng duy nhất |
+| `run_agent_demo` phụ thuộc API key ngoài (OpenRouter/Gemini/OpenAI tuỳ `LLM_PROVIDER`); môi trường chấm điểm không có key sẽ luôn thấy `agent_demo_answers.json` ở trạng thái `skipped` | Không thể coi agent demo là bằng chứng bắt buộc — chỉ là minh hoạ khi có key | Ghi rõ trong README/hướng dẫn chạy rằng bước demo là optional, không chặn pipeline; người chấm cần tự cấu hình `.env` nếu muốn xem agent chạy thật |
 
 ## 13. Checklist trước khi nộp
 
