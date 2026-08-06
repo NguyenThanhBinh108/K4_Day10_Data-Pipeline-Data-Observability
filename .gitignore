@@ -5,3 +5,7 @@ lab.txt
 src/*.egg-info/
 lab/
 **/__pycache__/
+
+# ChromaDB persistent store: nhi phan, tai tao duoc tu pipeline, khong merge duoc
+data/chroma/*
+!data/chroma/.gitkeep

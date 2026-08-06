@@ -1,0 +1,95 @@
+{
+  "generated_at": "2026-08-06T08:27:51.242703+00:00",
+  "selection_strategy": "stratified-by-published-desc",
+  "rows_before": 23,
+  "rows_after": 23,
+  "unique_paper_ids_after": 20,
+  "operations": [
+    {
+      "type": "drop_latest_records",
+      "count": 3,
+      "paper_ids": [
+        "10.2118/234689-pa",
+        "10.1007/s10278-026-02086-9",
+        "10.21203/rs.3.rs-10178277/v1"
+      ],
+      "params": {
+        "n": 3
+      },
+      "expected_signal": "freshness stale + retrieval miss cac cau hoi ve paper moi"
+    },
+    {
+      "type": "blank_summary",
+      "count": 4,
+      "paper_ids": [
+        "10.1148/radiol.251581",
+        "10.2196/preprints.106157",
+        "10.47576/2949-1894.2026.7.7.023",
+        "10.70121/001c.158711"
+      ],
+      "params": {
+        "ratio": 0.2
+      },
+      "expected_signal": "quality check summary_min_length fail"
+    },
+    {
+      "type": "inject_noise",
+      "count": 4,
+      "paper_ids": [
+        "10.21079/11681/50309",
+        "10.21203/rs.3.rs-9882260/v1",
+        "10.55041/isjem07213",
+        "10.7717/peerj-cs.3642"
+      ],
+      "params": {
+        "ratio": 0.25,
+        "noise": "lorem ipsum ### %%% dolor sit amet @@@ consectetur ??? adipiscing $$$"
+      },
+      "expected_signal": "embedding lech, token_f1 giam; quality co the van pass"
+    },
+    {
+      "type": "truncate_title",
+      "count": 4,
+      "paper_ids": [
+        "10.21079/11681/50309",
+        "10.21203/rs.3.rs-9882260/v1",
+        "10.55041/isjem07213",
+        "10.7717/peerj-cs.3642"
+      ],
+      "params": {
+        "ratio": 0.2,
+        "keep_chars": 12
+      },
+      "expected_signal": "exact lookup theo title trong qa.py hong"
+    },
+    {
+      "type": "stale_dates",
+      "count": 5,
+      "paper_ids": [
+        "10.20944/preprints202602.0996.v1",
+        "10.21203/rs.3.rs-9882260/v1",
+        "10.63646/kpqm1958",
+        "10.70121/001c.158711",
+        "10.7717/peerj-cs.3882"
+      ],
+      "params": {
+        "ratio": 0.25,
+        "shift_days": 800
+      },
+      "expected_signal": "freshness_age_days fail, is_fresh=false"
+    },
+    {
+      "type": "duplicate_rows",
+      "count": 3,
+      "paper_ids": [
+        "10.1093/sleep/zsag091.0346",
+        "10.47576/2949-1894.2026.7.7.023",
+        "10.7717/peerj-cs.3882"
+      ],
+      "params": {
+        "n": 3
+      },
+      "expected_signal": "quality check paper_id_unique fail"
+    }
+  ]
+}

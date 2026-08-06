@@ -50,7 +50,7 @@ Bị ép bởi `@dataclass PaperRecord` đã có sẵn. **Cấm thêm/bớt/đ�
 | `authors` | `list[str]` | ❌ | `item["author"][]` | `f"{given} {family}".strip()`; bỏ phần tử rỗng; không có ⇒ `[]` |
 | `categories` | `list[str]` | ❌ | `item["subject"]` | Không có ⇒ `[]` |
 | `primary_category` | `str` | ✅ | `categories[0]` | Fallback `"uncategorized"` |
-| `published` | `str` | ✅ | `item["issued"]["date-parts"][0]` | Format **`YYYY-MM-DD`**. Thiếu tháng/ngày ⇒ điền `01`. Parse fail ⇒ **drop record** |
+| `published` | `str` | ✅ | **`min(issued, created)`** — xem ghi chú dưới | Format **`YYYY-MM-DD`**. Thiếu tháng/ngày ⇒ điền `01`. Parse fail ⇒ **drop record**. `age_days > 180` ⇒ **drop record** |
 | `updated` | `str` | ❌ | `item["deposited"]` → fallback `item["created"]` | `YYYY-MM-DD`, không có ⇒ `""` |
 | `abs_url` | `str` | ❌ | `item["URL"]` | Không có ⇒ `""` |
 | `pdf_url` | `str` | ❌ | `item["link"][]` có `content-type == "application/pdf"` | Không có ⇒ `""` |
@@ -66,7 +66,7 @@ Bị ép bởi `@dataclass PaperRecord` đã có sẵn. **Cấm thêm/bớt/đ�
 | `query.bibliographic` | `settings.source_query` |
 | `filter` | `settings.source_filter` = `from-pub-date:<today-180d>,has-abstract:true` |
 | `rows` | `settings.max_results` = 24 |
-| `sort` / `order` | `published` / `desc` |
+| `sort` / `order` | **`relevance` / `desc`** — xem ghi chú dưới |
 | `User-Agent` | `Day10DataLab/1.0 (mailto:<email nhóm>)` — Crossref yêu cầu polite pool |
 | retry | 4 lần, backoff `2**attempt` giây, cho `429` / `500` / `502` / `503` / timeout |
 
@@ -75,6 +75,19 @@ Bị ép bởi `@dataclass PaperRecord` đã có sẵn. **Cấm thêm/bớt/đ�
 - `settings.paths.raw_records_json` — `[asdict(r) for r in records]`
 
 **Rule bất biến:** sau CP1, **không refetch** source (trừ khi cả nhóm đồng ý). Đây là snapshot dùng cho cả baseline lẫn repair — refetch giữa chừng làm comparison mất công bằng.
+
+### Ba quyết định dữ liệu đã kiểm chứng trên corpus thật
+
+Cả ba đều phát hiện được khi chạy fetch lần đầu và đã sửa. Nêu trong `group_report.md` §5.
+
+**1. `published = min(issued, created)`, không dùng thẳng `issued`.**
+Crossref `issued` là ngày xuất bản **danh nghĩa do nhà xuất bản khai** và rất hay nằm ở tương lai (số tạp chí sắp phát hành). Lần chạy đầu cho ra `issued` = 2027–2028 trong khi `created` = 2026-05…07 ⇒ `age_days` từ **−679 đến −147**, toàn bộ freshness monitoring vô nghĩa. `created` là thời điểm bản ghi thực sự vào Crossref, luôn ở quá khứ. Sau khi sửa: `age_days` = 5…175.
+
+**2. Áp lại cửa sổ tuổi trên ngày hiệu lực.**
+Filter `from-pub-date` của Crossref áp trên `issued`, còn ta dùng `min(issued, created)` ⇒ một số bản ghi lọt qua filter nguồn nhưng ngày hiệu lực rơi ngoài 180 ngày. Không áp lại thì baseline có sẵn dòng stale và tín hiệu freshness **không còn phân biệt được baseline với corrupted**. `parse_crossref_payload(payload, max_age_days=...)` lọc lại. Sau khi sửa: baseline `stale_rows = 0`.
+
+**3. `sort=relevance`, không phải `sort=published`.**
+Sắp theo ngày chỉ lấy các bản ghi có `issued` xa nhất ở tương lai ⇒ corpus lần chạy đầu toàn *"Mind Reader Robot: an Arduino-Based Game"*, *"Augmented Reality in Teacher Education"* — không dính dáng gì tới query về agentic RAG. Độ tươi đã được đảm bảo bởi filter `from-pub-date`, nên sort nên dành cho độ liên quan. Sau khi sửa: *SafeRAG*, *JADE-Plus: Multimodal Agentic RAG*, *Pioneering agentic RAG in software engineering*.
 
 ---
 
@@ -156,7 +169,7 @@ Bị ép bởi `evaluate_pipeline` ([metrics.py:113-131](src/evaluation/metrics.
 | Key | Type | Rule |
 |---|---|---|
 | `id` | `str` | `"q001"`, `"q002"`… duy nhất |
-| `question_type` | `str` | Enum chốt: `summary` \| `authors` \| `date` \| `categories` |
+| `question_type` | `str` | Enum chốt: `summary` \| `authors` \| `date` — **KHÔNG dùng `categories`**, xem cảnh báo dưới |
 | `question` | `str` | Theo template bên dưới. **Bắt buộc chứa title trong nháy đơn `'...'`** |
 | `ground_truth` | `str` | Lấy **nguyên văn** từ cột clean tương ứng |
 | `ground_truth_doc_ids` | `list[str]` | `[row["paper_id"]]` — lấy từ clean data, **cấm tự bịa ID** |
@@ -169,14 +182,28 @@ Bị ép bởi `evaluate_pipeline` ([metrics.py:113-131](src/evaluation/metrics.
 |---|---|---|---|
 | `authors` | `Who authored the paper titled '{title}'?` | `who authored` | `authors_joined` |
 | `date` | `When was the paper titled '{title}' published?` | `when was` | `published` |
-| `categories` | `What categories does the paper titled '{title}' belong to?` | `what categories` | `categories_joined` |
 | `summary` | `Summarize the paper titled '{title}'.` | (mặc định) | `first_sentence(summary)` |
+| ~~`categories`~~ | ~~`What categories does the paper titled '{title}' belong to?`~~ | ~~`what categories`~~ | **cấm dùng** |
 
 Vì sao phải có `'{title}'`: `qa.py:33` dùng `re.search(r"'([^']+)'", question)` để lookup exact và đẩy paper đúng lên đầu kết quả retrieval.
 
+> ### ⚠️ Cấm dùng `question_type = categories`
+>
+> Đo trên corpus thật: Crossref trả `subject` **rỗng 23/23 bản ghi** (Crossref đã ngừng
+> duy trì trường này cho phần lớn thành viên), nên `categories_joined = "uncategorized"`
+> ở **mọi** paper.
+>
+> Nếu vẫn tạo câu hỏi loại này, `ground_truth` giống hệt nhau ở mọi câu và
+> `token_f1 = 1.0` **bất kể retrieval trả về paper nào**. Hệ quả: baseline bị thổi
+> phồng, và corruption sẽ không làm nhóm câu hỏi này thay đổi ⇒ che mất impact thật.
+>
+> **Dùng 3 loại còn lại.** Để bù số câu, tăng số paper: 7–10 paper × 3 loại ⇒ **21–30 câu**.
+> Trường `categories_joined` vẫn nằm trong schema và vẫn vào metadata index — chỉ không
+> được dùng làm ground truth.
+
 ### Rule chọn paper
 
-- 5–8 paper × 4 question_type ⇒ **20–32 câu**
+- 7–10 paper × 3 question_type ⇒ **21–30 câu**
 - **Phải gồm ≥ 2 paper mới nhất** (`published` cao nhất) — vì corruption sẽ drop latest records; nếu test set không đụng tới paper mới thì corruption không thể hiện được impact
 - **Phải gồm ≥ 2 paper cũ nhất** — để có đối chứng
 - Chọn paper có `summary` dài, `authors_joined` không rỗng
@@ -252,8 +279,10 @@ Path chốt: baseline+repaired dùng `settings.paths.freshness_report`; corrupte
 
 ```json
 {
-  "generated_at": "...", "seed": 42,
+  "generated_at": "...",
+  "selection_strategy": "stratified-by-published-desc",
   "rows_before": 22, "rows_after": 21,
+  "unique_paper_ids_after": 18,
   "operations": [
     {"type": "drop_latest_records", "count": 3,
      "paper_ids": ["10.1000/abc", "..."],
@@ -263,7 +292,7 @@ Path chốt: baseline+repaired dùng `settings.paths.freshness_report`; corrupte
 }
 ```
 
-6 kịch bản chốt (seed `42`, `random.Random(42)`):
+6 kịch bản chốt:
 
 | `type` | params | Tác động | Quality signal kỳ vọng |
 |---|---|---|---|
@@ -273,6 +302,15 @@ Path chốt: baseline+repaired dùng `settings.paths.freshness_report`; corrupte
 | `truncate_title` | `ratio=0.2, keep=12` | `title = title[:12]` | qa lookup exact hỏng |
 | `stale_dates` | `ratio=0.25, days=800` | `published -= 800d`, **tính lại `age_days`** | `freshness_age_days` fail, `is_fresh=false` |
 | `duplicate_rows` | `n=3` | `pd.concat` lặp dòng | `paper_id_unique` fail |
+
+### Cách chọn record bị hỏng: phân tầng, không random
+
+Contract C bắt buộc test set chứa cả paper **mới nhất** lẫn **cũ nhất**. Nếu corruption chọn ngẫu nhiên
+thì có thể trượt hết các paper được hỏi, và metric sẽ **không đổi** — nhóm không chứng minh được gì.
+
+Vì vậy `_spread_ids` chọn các dòng **trải đều trên thứ tự `published` giảm dần**, mỗi kịch bản lệch
+một `offset` khác nhau để không dồn hết vào cùng một nhóm dòng. Kết quả tất định, không cần seed,
+và **chắc chắn giao với test set**.
 
 ### 🔒 3 rule bắt buộc
 
