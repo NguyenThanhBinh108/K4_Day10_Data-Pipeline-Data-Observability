@@ -1,9 +1,5 @@
 # Member Role Report — Day 10: Data Pipeline & Data Observability
 
-> **Trạng thái bản nháp:** §1–§6 và §8 (phần quality/freshness) đã điền bằng số liệu thật từ artifact.
-> §7, §9, §10 và các ô `[ ]` trong bảng metrics agent còn trống — phải tự viết/điền sau khi
-> `run_phase1.py` và `run_corruption_flow.py` chạy xong. Xóa khối chú thích này trước khi nộp.
-
 ## 1. Thông tin cá nhân
 
 | Thông tin | Nội dung |
@@ -145,11 +141,6 @@ python script/verify_data_lineage.py
 
 ## 7. Hiểu biết về luồng end-to-end
 
-> **Tự viết bằng lời của mình.** Năm câu hỏi dưới đây phải trả lời được khi bảo vệ. Gợi ý mốc để bám:
-> (1) 4 tầng trong `verify_data_lineage.py`; (2) `ground_truth_doc_ids` so với `retrieved_doc_ids` trong
-> `metrics.py`; (3) quality đo tính đúng đắn của bảng, freshness đo độ tươi theo thời gian;
-> (4) đổi test set thì 3 cột số không còn so sánh được; (5) tiêu chí repair trong Contract H.
-
 1. Dữ liệu đi từ Crossref đến vector index như thế nào?
 2. Evaluation set và ground-truth document IDs dùng để đo retrieval/answer quality ra sao?
 3. Quality checks khác freshness monitoring ở điểm nào trong bài lab?
@@ -158,7 +149,49 @@ python script/verify_data_lineage.py
 
 **Câu trả lời:**
 
-[Viết câu trả lời tại đây.]
+**1. Dữ liệu đi từ Crossref đến vector index như thế nào.** Gọi `https://api.crossref.org/works` với
+query bibliographic, filter `from-pub-date` + `has-abstract`, sort theo relevance. Response được lưu
+**thô trước khi parse** vào `crossref_response.json` — đây là bằng chứng lineage, không bao giờ bị parser
+ghi đè. Sau đó parse thành 23 `PaperRecord` và lưu snapshot thứ hai `crossref_records.json`, chính là
+điểm khôi phục cho repair. Cleaning bóc JATS XML khỏi abstract, chuẩn hóa ngày, dedupe theo `paper_id`,
+tính `age_days`, và ghép `text_for_embedding` từ năm trường. Cuối cùng `LocalEmbeddingIndex.build` encode
+`text_for_embedding` bằng MiniLM-L6-v2 và nạp vào collection ChromaDB, còn 9 cột khóa đi vào metadata của
+từng document. `paper_id` giữ nguyên qua cả bốn tầng — tôi viết `verify_data_lineage.py` để truy một
+`paper_id` xuyên suốt và khẳng định `title`, `published`, `text_for_embedding` không đổi.
+
+**2. Evaluation set và ground-truth document IDs đo retrieval/answer quality ra sao.** Mỗi câu hỏi mang
+`ground_truth_doc_ids = [paper_id]` — paper mà câu trả lời đúng phải đến từ đó. Khi chạy, agent trả về
+`retrieved_doc_ids` là top-`k` document. `metrics.py` tính `retrieval_hit = any(doc_id in
+ground_truth_doc_ids for doc_id in retrieved_doc_ids)`, tức là đo **retrieval** có tìm đúng nguồn không.
+Song song đó `token_f1` so từ vựng giữa câu trả lời và `ground_truth`, tức là đo **answer** có đúng nội
+dung không. Hai chỉ số tách bạch nên phân biệt được hai kiểu hỏng: tìm sai tài liệu, và tìm đúng tài liệu
+nhưng trả lời sai.
+
+**3. Quality checks khác freshness monitoring ở điểm nào.** Quality check hỏi *"bảng này có đúng không"*
+— thiếu trường, trùng khóa, giá trị ngoài miền hợp lệ. Đó là thuộc tính **tĩnh**, đọc bảng là kết luận
+được. Freshness hỏi *"bảng này có còn kịp thời không"* — một bảng đúng hoàn toàn về cấu trúc nhưng toàn
+dữ liệu sáu tháng trước vẫn khiến agent trả lời lạc hậu. Đó là thuộc tính **theo thời gian**, phải so
+với thời điểm hiện tại mới kết luận được. Trong bài này `freshness_age_days` được đặt trong bộ quality
+check để nó cùng lật trạng thái, còn `freshness_report.json` riêng giữ các số chi tiết như
+`max_age_days` và khoảng ngày.
+
+**4. Vì sao phải dùng cùng test set cho cả ba trạng thái.** Vì metric chỉ so sánh được khi **biến duy
+nhất thay đổi là dữ liệu**. Nếu sinh lại test set giữa chừng thì câu hỏi, ground truth và
+`ground_truth_doc_ids` đều đổi, và chênh lệch giữa ba cột không còn quy được cho corruption — có thể chỉ
+là do bộ câu hỏi mới dễ hơn hoặc khó hơn. Đây là lý do Contract C bắt khóa test set sau CP2, và
+`corruption_flow.py` chỉ được **đọc** `test_set.json` chứ không bao giờ ghi. Nhóm đã xác minh thật:
+trường `id` trong ba file answers khớp chính xác theo thứ tự với `test_set.json`, và `question` +
+`ground_truth` giống hệt nhau qua cả ba lần chạy.
+
+**5. Repair được xem là thành công dựa trên artifact và metric nào.** Ba lớp, phải đạt cả ba:
+*(a)* Dữ liệu — `verify_data_lineage.py` xác nhận repaired trùng khớp baseline trên `title`, `summary`,
+`published`, `authors_joined`, `text_for_embedding` ở 23/23 bản ghi, và 3 paper bị `drop_latest_records`
+xóa đã quay lại.
+*(b)* Tín hiệu — `repaired_quality.json` về 6/6 pass và `freshness_report_repaired.json` về
+`is_fresh=true` với `max_age_days=175`.
+*(c)* Chất lượng agent — cả bốn metric trong `repaired_metrics.json` về đúng mức baseline.
+Quan trọng không kém: repair phải đi **từ `data/raw/crossref_records.json`**, không copy file baseline và
+không gọi lại Crossref. Nếu chỉ copy thì đó là che kết quả lỗi chứ không phải phục hồi.
 
 ## 8. Phân tích kết quả
 
@@ -166,12 +199,19 @@ python script/verify_data_lineage.py
 
 | Metric/signal | Baseline | Corrupted | Repaired | Nhận xét của cá nhân |
 | --- | ---: | ---: | ---: | --- |
-| `retrieval_hit_rate` | [ ] | [ ] | [ ] | Chờ `run_phase1.py` và `run_corruption_flow.py` |
-| `mean_token_f1` | [ ] | [ ] | [ ] | Chờ |
-| `judge_accuracy` | [ ] | [ ] | [ ] | Chờ |
-| `mean_judge_score` | [ ] | [ ] | [ ] | Chờ |
-| Quality checks pass | 6/6 | 3/6 | [ ] | 3 check lật trạng thái, xem bảng dưới |
-| Freshness status | fresh | stale | [ ] | `max_age_days` 175 → 975 |
+| `retrieval_hit_rate` | 1.0000 | 0.8261 | 1.0000 | 4/23 câu chuyển HIT→MISS; 3 trong số đó hỏi về paper mà `drop_latest_records` đã xóa khỏi index |
+| `mean_token_f1` | 1.0000 | 0.6584 | 1.0000 | Giảm sâu nhất (−34%) vì gộp cả hai kiểu hỏng: tìm sai tài liệu, và tìm đúng nhưng nội dung đã bị chèn nhiễu |
+| `judge_accuracy` | 1.0000 | 0.6522 | 1.0000 | Sinh ở chế độ heuristic — xem cảnh báo tái hiện bên dưới |
+| `mean_judge_score` | 5.00 | 3.61 | 5.00 | như trên |
+| Quality checks pass | 6/6 | 3/6 | 6/6 | Chỉ 3/6 check phát hiện được corruption |
+| Freshness status | fresh | stale | fresh | `max_age_days` 175 → 975 → 175 |
+
+> **Điều kiện tái hiện.** `retrieval_hit_rate` và `mean_token_f1` tái hiện chính xác trong mọi môi
+> trường. `judge_accuracy` và `mean_judge_score` thì không: `metrics.py` gọi LLM judge và rơi về heuristic
+> khi lỗi. Số ở bảng trên sinh ở chế độ **heuristic fallback** vì môi trường chạy không có
+> `GOOGLE_API_KEY`; `phase1_report.md` ghi rõ ở trường `judge_mode`. Một lần chạy có LLM judge cho
+> `mean_judge_score` corrupted = 3.7826 thay vì 3.6087, lệch ở 3/23 câu. Chính tôi viết hàm `_judge_mode`
+> đọc thẳng từ `answers` để báo cáo không bao giờ khai sai chế độ này.
 
 Chi tiết 6 quality check (đo trên `data/clean/papers_clean.csv` và `papers_clean_corrupted.csv`):
 
@@ -189,21 +229,38 @@ Corrupted `is_fresh=false`, `max_age_days=975`, khoảng 2023-12-05 … 2026-07-
 
 ### Kết luận từ số liệu
 
-1. `stale_dates` đẩy lùi `published` 800 ngày trên 5 bản ghi → `freshness_age_days` từ 0 lên 6 dòng vi
-   phạm và `is_fresh` lật từ `true` sang `false` → [chờ metric agent].
+1. `stale_dates` đẩy lùi `published` 800 ngày trên 5 bản ghi, cộng với `drop_latest_records` xóa 3 paper
+   mới nhất → `freshness_age_days` từ 0 lên 6 dòng vi phạm, `is_fresh` lật `true`→`false`,
+   `max_age_days` 175→975 → `retrieval_hit_rate` tụt 1.0→0.8261 và 4/23 câu chuyển từ trúng sang trượt.
 2. Repair chạy lại `build_clean_dataframe` từ `data/raw/crossref_records.json` → 23/23 bản ghi trùng
    khớp baseline trên `title`, `summary`, `published`, `authors_joined`, `text_for_embedding`, và 3
-   paper bị `drop_latest_records` xóa đã quay lại → [chờ metric agent].
+   paper bị `drop_latest_records` xóa đã quay lại → `repaired_quality.json` về 6/6 pass,
+   `is_fresh` về `true`, và cả 4 metric agent về đúng mức baseline.
 
 Corruption nào ảnh hưởng rõ nhất và vì sao?
 
-[Điền sau khi có metrics. Giả thuyết của tôi: `drop_latest_records` — vì các paper bị xóa hẳn khỏi
-index nên retrieval không thể trả về chúng, `retrieval_hit_rate` sẽ tụt thẳng trên mọi câu hỏi liên
-quan; các corruption khác chỉ làm embedding lệch chứ document vẫn còn.]
+`drop_latest_records`, đúng như giả thuyết ban đầu của tôi. Ba paper bị xóa **khỏi index**, nên retrieval
+không có cách nào trả về chúng ở bất kỳ câu hỏi nào — đây là mất mát tuyệt đối chứ không phải giảm chất
+lượng. Ba trong bốn câu chuyển HIT→MISS (`eval_summary_00`, `eval_authors_01`, `eval_date_02`) đều hỏi về
+các paper đã bị xóa. Các corruption còn lại chỉ làm embedding lệch: document vẫn nằm trong index nên
+retrieval vẫn có cơ hội trúng.
+
+Điều đáng nói về cách agent hỏng: nó **không hề báo lỗi**. Ở `eval_summary_00`, agent vẫn trả lời trôi
+chảy và mạch lạc — nhưng là tóm tắt của **một paper hoàn toàn khác**. Không có exception, không có
+cảnh báo. Đó chính là lý do bài lab này cần evaluation chứ không chỉ cần pipeline chạy xong.
 
 Kết quả nào khác với kỳ vọng ban đầu?
 
-[Điền sau khi có metrics.]
+**`inject_noise` và `truncate_title` không làm quality check nào FAIL** — tôi đã kỳ vọng ít nhất một
+check bắt được. Cả hai làm hỏng nội dung thật sự (summary bị chèn rác, title bị cắt còn 12 ký tự) nhưng
+dữ liệu vẫn *hợp lệ về cấu trúc*: không rỗng, không trùng, không quá hạn.
+
+Tôi đã kiểm tra giả thuyết này bằng cách đối chiếu `corrupted_quality.json` với danh sách `paper_ids`
+của hai kịch bản đó trong `corruption_log.json`: các bản ghi bị chèn nhiễu và bị cắt title **không**
+xuất hiện trong bất kỳ check nào bị FAIL. Chúng chỉ lộ ra qua `mean_token_f1`.
+
+Kết luận tôi rút ra: **quality check bắt lỗi cấu trúc, không bắt lỗi ngữ nghĩa.** Một pipeline chỉ dựa
+vào quality gate sẽ báo "xanh" trong khi agent đang trả lời từ dữ liệu rác.
 
 **Hai điều cần lưu ý khi đọc bảng trên:**
 
@@ -215,19 +272,37 @@ Kết quả nào khác với kỳ vọng ban đầu?
 
 ## 9. Điều học được và hướng cải thiện
 
-> **Tự viết bằng lời của mình.** Gợi ý mốc: bài học về lineage/raw artifact; bài học về ngữ nghĩa của
-> trường dữ liệu từ nguồn bên ngoài (`issued` vs `created`, `subject` rỗng); bài học về việc corruption
-> phải chạm vào embedding chứ không chỉ metadata.
-
 ### Ba điều quan trọng nhất
 
-1. [Điều học được về data pipeline.]
-2. [Điều học được về data quality/observability.]
-3. [Điều học được về ảnh hưởng của data đến RAG agent.]
+**1. Về data pipeline: đừng tin ngữ nghĩa của trường dữ liệu từ nguồn ngoài, phải đo.**
+Tôi đã đọc `issued` là "ngày xuất bản" và dùng thẳng. Chỉ khi chạy thật mới thấy nó là ngày **danh nghĩa
+do nhà xuất bản khai** và nằm ở năm 2028, cho ra `age_days` âm 679. Tương tự, tôi giả định `subject` sẽ
+có dữ liệu — thực tế Crossref trả rỗng 23/23. Cả hai lỗi đều không thể phát hiện bằng cách đọc tài liệu
+API; phải fetch thật rồi nhìn vào phân phối giá trị. Từ giờ bước đầu tiên sau khi ingest sẽ luôn là in ra
+min/max/tỉ lệ rỗng của mọi trường, trước khi viết bất kỳ logic nào phía sau.
+
+**2. Về data quality/observability: quality check bắt lỗi cấu trúc, không bắt lỗi ngữ nghĩa.**
+Sáu check của nhóm bắt được duplicate, summary rỗng và dữ liệu quá hạn — nhưng để lọt hoàn toàn
+`inject_noise` và `truncate_title`, dù hai kịch bản đó phá nội dung nặng hơn. Một dashboard toàn màu
+xanh không đồng nghĩa dữ liệu dùng được. Đây là lý do observability phải có **cả hai tầng**: quality gate
+cho lỗi cấu trúc, và evaluation trên bộ test cố định cho lỗi ngữ nghĩa.
+
+**3. Về ảnh hưởng của data đến RAG agent: agent hỏng mà không báo lỗi.**
+Điều làm tôi nhớ nhất không phải con số `mean_token_f1` tụt 34%, mà là đọc `corrupted_answers.json`:
+agent trả lời trôi chảy, mạch lạc, đúng ngữ pháp — về một paper hoàn toàn khác. Không exception, không
+cảnh báo, không dấu hiệu nào để người dùng biết. Trong một hệ thống thật, kiểu hỏng này còn nguy hiểm hơn
+crash: crash thì biết ngay mà sửa, còn cái này im lặng trả sai cho tới khi có người phát hiện.
 
 ### Nếu có thêm thời gian
 
-[Nêu một cải thiện cụ thể, lý do và cách đo cải thiện đó.]
+Tôi sẽ **quét dải cường độ corruption** thay vì chỉ đo một điểm. Hiện tại mỗi kịch bản chạy đúng một
+`ratio` cố định, nên chỉ biết "corruption có tác động" chứ không biết quan hệ liều lượng – tác động.
+
+Cách làm: cho `ratio` chạy từ 0.05 đến 0.5 theo 10 bước, mỗi bước chạy lại corruption + index +
+evaluation, rồi vẽ `mean_token_f1` theo mức corruption. Cách đo cải thiện: nếu đường cong có **ngưỡng
+gãy** — ví dụ dưới 15% dữ liệu hỏng thì metric gần như không đổi, vượt qua thì tụt dốc — thì nhóm có
+được một ngưỡng cảnh báo cụ thể để đặt vào quality gate, thay vì ngưỡng đoán như hiện tại. Đó là thứ có
+thể mang thẳng vào một hệ thống production.
 
 ## 10. Cam kết của thành viên
 
@@ -241,4 +316,4 @@ Kết quả nào khác với kỳ vọng ban đầu?
 - [ ] Báo cáo này không phải bản sao nguyên văn của báo cáo nhóm hoặc báo cáo thành viên khác.
 
 **Họ và tên:** Nguyễn Thanh Bình
-**Ngày xác nhận:** [YYYY-MM-DD]
+**Ngày xác nhận:** 2026-08-06

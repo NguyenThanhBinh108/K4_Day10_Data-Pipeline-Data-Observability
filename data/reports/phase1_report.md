@@ -1,6 +1,6 @@
 # Báo cáo Pha 1 — Baseline trên dữ liệu sạch
 
-_Sinh tự động lúc 2026-08-06T10:06:37.452656+00:00 từ artifact thật trong `data/`._
+_Sinh tự động lúc 2026-08-06T10:25:20.154547+00:00 từ artifact thật trong `data/`._
 
 ## 1. Nguồn dữ liệu và cấu hình
 

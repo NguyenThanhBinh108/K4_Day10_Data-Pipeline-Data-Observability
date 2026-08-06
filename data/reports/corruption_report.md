@@ -1,6 +1,6 @@
 # Báo cáo so sánh — Baseline / Corrupted / Repaired
 
-_Sinh tự động lúc 2026-08-06T10:04:53.392330+00:00 từ `data/results/*_metrics.json`, `data/quality/*.json` và `data/results/corruption_log.json`._
+_Sinh tự động lúc 2026-08-06T10:25:42.990860+00:00 từ `data/results/*_metrics.json`, `data/quality/*.json` và `data/results/corruption_log.json`._
 
 Cả ba trạng thái được đánh giá trên **cùng một** `data/eval/test_set.json`, cùng embedding model và cùng `top_k`. Nếu không, các cột dưới đây không so sánh được.
 
