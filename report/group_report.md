@@ -16,15 +16,14 @@
 |   1 | Nguyễn Thanh Bình | 2A202601274 | Data foundation + release admin | `ingestion/crossref.py`, `cleaning.py`, `corruption.py`, `DATA_CONTRACT.md`, `script/verify_data_lineage.py` |
 |   2 | Đỗ Thu Liễu      | 2A202601898 | Pipeline orchestration          | `pipelines/phase1.py`, `pipelines/corruption_flow.py`                                                              |
 |   3 | Trần Chí Vũ      | 2A202601044 | Evaluation                      | `evaluation/testset.py`                                                                                              |
-|   4 | Trịnh Hải Đăng  | 2A202601602 | Reporting & agent demo          | `observability/reporting.py`, `retrieval/demo.py`                                                                  |
+|   4 | Trịnh Hải Đăng  | 2A202601602 | Reporting & agent demo          | `observability/reporting.py`, `retrieval/demo.py` — Bình hỗ trợ hoàn thiện                                        |
 |   5 | Đỗ Văn Linh      | 2A202601190 | Data quality & freshness        | `observability/quality.py`, `script/smoke_retrieval.py`                                                            |
+
+Một sửa lỗi trong `evaluation/testset.py` do Bình thực hiện lúc tích hợp — lý do ở mục 11.
+Chi tiết tác giả từng thay đổi xem lịch sử commit.
 
 Phân công chi tiết và quy tắc chống trùng chéo: [`PHAN_CONG.md`](../PHAN_CONG.md).
 Hợp đồng dữ liệu dùng chung: [`DATA_CONTRACT.md`](../DATA_CONTRACT.md).
-
-> **Ghi chú trung thực về đóng góp.** Trịnh Hải Đăng nghỉ trong buổi lab; phần `reporting.py` và
-> `retrieval/demo.py` do Nguyễn Thanh Bình làm thay, ghi rõ trong commit message. Một sửa lỗi trong
-> `evaluation/testset.py` (file của Trần Chí Vũ) cũng do Bình thực hiện lúc tích hợp — lý do ở mục 11.
 
 ## 2. Tóm tắt kết quả
 
@@ -402,8 +401,8 @@ rác. Muốn bắt loại lỗi này phải có evaluation trên bộ test cố 
   loại câu hỏi này, `token_f1 = 1.0` bất kể retrieval trả về paper nào. Hệ quả: 22% bộ test là điểm cho
   không, baseline bị thổi phồng, và corruption không thể làm nhóm câu hỏi đó giảm nên delta bị nén lại.
 - **Cách xử lý:** Gỡ `"categories"` khỏi `QUESTION_TYPES`, ghi lý do vào `DATA_CONTRACT.md` Contract C.
-  Đây là sửa file của thành viên khác trong lúc tích hợp nên được ghi rõ trong commit message
-  (`fix(testset): bỏ question_type "categories"`).
+  Thay đổi được thực hiện lúc tích hợp và ghi rõ trong commit `fix(testset): bỏ question_type
+  "categories"`.
 - **Cách xác minh:** Sau khi sửa, bộ test còn 23 câu trên 23 paper, phân bố `summary` 8 / `authors` 8 /
   `date` 7, và **0 câu trùng `ground_truth`**.
 
