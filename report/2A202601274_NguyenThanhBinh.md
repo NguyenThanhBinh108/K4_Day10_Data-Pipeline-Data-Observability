@@ -7,7 +7,7 @@
 | Họ và tên | Nguyễn Thanh Bình |
 | MSSV | 2A202601274 |
 | Khóa/Lớp | K4 |
-| Tên nhóm | [Tên hoặc mã nhóm] |
+| Tên nhóm | B52 |
 | Vai trò chính | R1 — Data foundation owner + release admin |
 | Repository | https://github.com/NguyenThanhBinh108/K4_Day10_Data-Pipeline-Data-Observability |
 | Ngày hoàn thành | 2026-08-06 |

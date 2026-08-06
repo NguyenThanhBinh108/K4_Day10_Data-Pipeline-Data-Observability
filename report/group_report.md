@@ -5,7 +5,7 @@
 | Thông tin | Nội dung |
 | --- | --- |
 | Khóa/Lớp | K4 |
-| Tên nhóm | [Tên hoặc mã nhóm] |
+| Tên nhóm | B52 |
 | Repository | https://github.com/NguyenThanhBinh108/K4_Day10_Data-Pipeline-Data-Observability |
 | Ngày hoàn thành | 2026-08-06 |
 
